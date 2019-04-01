@@ -2,9 +2,7 @@ let getRequest = (url) => {
     return fetch(url).then((response) => response.json());
 };
 
-//let sendRequest = (url) =>
-
-const API = "http://localhost:3000/server.json";
+const API = "http://localhost:3000";
 
     class Item {
         constructor(product, img = 'https://www.resursltd.ru/images/cms/thumbs/f010964dc04aea08ebcc6ded3d85364e36d15396/nofoto_120_100_5_100.jpg') {
@@ -30,11 +28,13 @@ const API = "http://localhost:3000/server.json";
         constructor(container = ".container") {
             this.container = container;
             this.products = [];
+            this.cartArr = [];
 
         }
 
         fetchItems() {
-           getRequest(`${API}`)
+            this._fetchItemsCart();
+           getRequest(`${API}/goodsList`)
                 .then(data => {
                     let goods = [];
                     goods = data;
@@ -42,6 +42,24 @@ const API = "http://localhost:3000/server.json";
                 });
 
         }
+
+        _fetchItemsCart() {
+            this.cartArr = [];
+            let fetchedCart = [];
+            getRequest(`${API}/cartGoods`)
+                 .then(data => {
+                     fetchedCart = data;
+                 })
+                .then(item => {
+                    for(item of fetchedCart) {
+                        this.cartArr.push({
+                            id: item.id,
+                            quantity: item.quantity
+                        })
+                    }
+                })
+        }
+
 
         _render(goods) {
             const block = document.querySelector(this.container);
@@ -53,33 +71,60 @@ const API = "http://localhost:3000/server.json";
         }
 
         addToCart() {
-            let btnsToCart = [...document.querySelectorAll(".addToCart")];
-            btnsToCart.forEach(item => {
-                item.addEventListener("click", (event) => {
+            let $container = document.querySelector(".container");
+            $container.addEventListener("click", (event) => {
                     let title = event.target.dataset.title;
                     let price = event.target.dataset.price;
-                    let id = event.target.dataset.id;
+                    let id = +event.target.dataset.id;
                     let img = event.target.dataset.img;
-                    fetch("/cartGoods", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({id: id, title: title, price: price, img: img})
-                    });
+                    if (this.cartArr.length === 0) {                  // условие для проверки, если в корзине ничего нет, то добавляем новый item
+                        fetch("/cartGoods", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({id, title, price, img, quantity: 1})
+                        });
+                        this._fetchItemsCart();
+                    } else {                            // далее проверка, есть ли выбранный item уже в корзине
+                        for(let item of this.cartArr) {
+                            if (item.id === id) {
+                                item.quantity++;
+                                fetch(`${API}/cartGoods/${item.id}`, {
+                                    method: "PATCH",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({quantity: item.quantity})
+                                });
+                                this._fetchItemsCart();
+                            } else if (item.id !== id && item !== this.cartArr[this.cartArr.length - 1]) {     // условие, читобы сначала пробежаться по всему циклу
+                                continue
+                            } else {
+                                fetch("/cartGoods", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({id, title, price, img, quantity: 1})
+                                });
+                                this._fetchItemsCart();
+                            }
+                        }
+                    }
                 });
-            });
-        };
+            };
 
         calcSumm() {
             return this.products.reduce((sum, current) =>
                 sum += current.price, 0)
-        }
+        };
 
     }
 
     let itemsList = new ItemList();
     itemsList.fetchItems() ;
+    itemsList.addToCart();
 
 
 
